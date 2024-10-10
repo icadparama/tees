@@ -1,0 +1,237 @@
+---
+title: "UPRAK MPDW"
+author: "Irsyad Parama"
+date: "2024-10-10"
+output: html_document
+---
+
+# Ujian Praktek MPDW
+
+Nama : Irsyad Parama Dwiputra
+
+NIIM : G1401221101
+
+Bilangan Acak : 31
+
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(forecast)
+library(TSA)
+library(TTR)
+library(aTSA)
+library(graphics)
+library(readxl)
+```
+
+```{r}
+data <- read_excel("C:/Users/DSITD/Downloads/dataset_ujian_praktikum.xlsx", sheet = "Sheet2")
+#View(data)
+```
+
+```{r}
+ts.plot(data, xlab="Time Period ", ylab="Reading", 
+        main = "Time Series Plot")
+points(data)
+```
+
+```{r}
+data.ts <- ts(data$Penambahan)
+```
+
+```{r}
+training_ma <- data[1:400,]
+testing_ma <- data[401:01,]
+train_ma.ts <- ts(training_ma$Penambahan)
+test_ma.ts <- ts(testing_ma$Penambahan)
+```
+
+```{r}
+#eksplorasi keseluruhan data
+plot(data.ts, col="red",main="Plot semua data")
+points(data.ts)
+
+#eksplorasi data latih
+plot(train_ma.ts, col="blue",main="Plot data latih")
+points(train_ma.ts)
+
+#eksplorasi data uji
+plot(test_ma.ts, col="blue",main="Plot data uji")
+points(test_ma.ts)
+```
+
+```{r}
+data.sma<-SMA(train_ma.ts, n=4)
+data.sma
+```
+
+```{r}
+data.ramal<-c(NA,data.sma)
+data.ramal
+```
+
+```{r}
+data.gab<-cbind(aktual=c(train_ma.ts,rep(NA,24)),pemulusan=c(data.sma,rep(NA,24)),ramalan=c(data.ramal,rep(data.ramal[length(data.ramal)],23)))
+data.gab 
+```
+
+```{r}
+error_train.sma = train_ma.ts-data.ramal[1:length(train_ma.ts)]
+SSE_train.sma = sum(error_train.sma[5:length(train_ma.ts)]^2)
+MSE_train.sma = mean(error_train.sma[5:length(train_ma.ts)]^2)
+MAPE_train.sma = mean(abs((error_train.sma[5:length(train_ma.ts)]/train_ma.ts[5:length(train_ma.ts)])*100))
+
+akurasi_train.sma <- matrix(c(SSE_train.sma, MSE_train.sma, MAPE_train.sma))
+row.names(akurasi_train.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train.sma) <- c("Akurasi m = 4")
+akurasi_train.sma
+```
+
+Dalam hal ini nilai MAPE data latih pada metode pemulusan SMA kurang dari 2%, nilai ini dapat dikategorikan sebagai nilai akurasi yang sangat baik. Selanjutnya dilakukan perhitungan nilai MAPE data uji pada metde pemulusan SMA.
+
+```{r}
+#Menghitung nilai keakuratan data uji
+error_test.sma = test_ma.ts-data.gab[97:120,3]
+SSE_test.sma = sum(error_test.sma^2)
+MSE_test.sma = mean(error_test.sma^2)
+MAPE_test.sma = mean(abs((error_test.sma/test_ma.ts*100)))
+
+akurasi_test.sma <- matrix(c(SSE_test.sma, MSE_test.sma, MAPE_test.sma))
+row.names(akurasi_test.sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test.sma) <- c("Akurasi m = 4")
+akurasi_test.sma
+```
+
+Perhitungan akurasi menggunakan data latih menghasilkan nilai MAPE yang kurang dari 10% sehingga nilai akurasi ini dapat dikategorikan sebagai sangat baik.
+
+```{r}
+acf(data.ts, main="ACF", lag.max=20)
+```
+
+Berdasarkan plot ACF di atas, dapat dilihat bahwa plot slowly cut off pada lag.
+
+```{r}
+adf.test(data.ts) 
+```
+
+H0 : Data tidak stasioner dalam rataan
+
+H1 : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak H0 dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+```{r}
+par(mfrow = c(1,2))
+acf(data.ts, main="ACF", lag.max=20) #ARIMA(0,0,2)
+pacf(data.ts, main="PACF", lag.max=20) #ARIMA(1,0,0)
+par(mfrow = c(1,1))
+```
+
+Berdasarkan Plot ACF, terlihat slowly cuts off pada lag ke-2 . Selanjutnya, berdasarkan plot PACF, terlihat cuts off pada lag pertama.
+
+```{r}
+eacf(data.ts) 
+```
+
+Menggunakan plot EACF, dapat diambil beberapa model dengan melihat ujung segitiga yang terbentuk, antara lain ARIMA(1,0,2), ARIMA(2,0,3), ARIMA(3,0,6), dan ARIMA(4,0,6), ARIMA(1,0,5)
+
+```{r}
+#---PENDUGAAN PARAMETER MODEL---#
+model1.ma2=Arima(data.ts, order=c(1,0,2),method="ML")
+summary(model1.ma2) #AIC= 1420.77   
+lmtest::coeftest(model1.ma2) #seluruh parameter signifikan
+
+model2.ma2=Arima(data.ts, order=c(2,0,3),method="ML") 
+summary(model2.ma2) #AIC=1398.79   
+lmtest::coeftest(model2.ma2) #seluruh parameter signifikan
+
+model3.ma2=Arima(data.ts, order=c(3,0,6),method="ML") 
+summary(model3.ma2) #AIC=1387.28   
+lmtest::coeftest(model3.ma2) #ma6 tidak signifikan
+
+model4.ma2=Arima(data.ts, order=c(4,0,4),method="ML") 
+summary(model4.ma2) #AIC=1396.33   
+lmtest::coeftest(model4.ma2) #ar4 tidak signifkan
+
+model5.ma2=Arima(data.ts, order=c(1,0,5),method="ML") 
+summary(model5.ma2) #AIC=1399.61   
+lmtest::coeftest(model5.ma2) #ma5 tidak signifikan
+```
+
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil dimiliki oleh model ARIMA(3,0,6) juga memiliki ma6 tidak signifkan
+
+```{r}
+sisaan.ma2 <- model1.ma2$residuals
+par(mfrow=c(2,2))
+qqnorm(sisaan.ma2)
+qqline(sisaan.ma2, col = "blue", lwd = 2)
+plot(c(1:length(sisaan.ma2)),sisaan.ma2)
+acf(sisaan.ma2)
+pacf(sisaan.ma2)
+par(mfrow = c(1,1))
+```
+
+Berdasarkan plot kuantil-kuantil normal, secara eksplorasi ditunjukkan sisaan menyebar normal mengikuti garis miring. Kemudian dapat dilihat juga lebar pita sisaan yang cenderung sama menandakan bahwa sisaan memiliki ragam yang homogen. Akan tetapi, plot ACF dan PACF sisaan ARIMA(3,0,6) signifikan pada lag ke-3 sehingga sisaan tidak saling bebas. Kondisi ini akan diuji lebih lanjut dengan uji formal.
+
+```{r}
+ks.test(sisaan.ma2,"pnorm") 
+```
+
+Selain dengan eksplorasi, asumsi tersebut dapat diuji menggunakan uji formal. Pada tahapan ini uji formal yang digunakan untuk normalitas adalah uji Kolmogorov-Smirnov (KS). Hipotesis pada uji KS adalah sebagai berikut.
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.08333 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
+
+```{r}
+Box.test(sisaan.ma2, type = "Ljung") 
+```
+
+Selanjutnya akan dilakukan uji formal untuk kebebasan sisaan menggunakan uji Ljung-Box. Hipotesis yang digunakan adalah sebagai berikut.
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.05135 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan saling bebas. Hal ini berbeda dengan eksplorasi.
+
+```{r}
+Box.test((sisaan.ma2)^2, type = "Ljung")
+```
+
+Hipotesis yang digunakan untuk uji kehomogenan ragam adalah sebagai berikut.
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box terhadap sisaan kuadrat tersebut, didapat *p-value* sebesar 0.0004979 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa ragam sisaan tidak homogen.
+
+```{r}
+t.test(sisaan.ma2, mu = 0, conf.level = 0.95) 
+```
+
+Terakhir, dengan uji-t, akan dicek apakah nilai tengah sisaan sama dengan nol. Hipotesis yang diujikan sebagai berikut.
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.5287 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan nol.
+
+```{r}
+
+model1a.ma2=Arima(data.ts, order=c(1,0,1),method="ML")
+summary(model1a.ma2) #1452.71      
+lmtest::coeftest(model1a.ma2) #ma1 tidak signifkan 
+
+model1b.ma2=Arima(data.ts, order=c(2,0,1),method="ML")
+summary(model1b.ma2) #1452.87      
+lmtest::coeftest(model1b.ma2) #ar1 tidak signifikan 
+```
+
+Berdasarkan kedua model hasil *overfitting* di atas, model ARIMA(1,0,1) dan ARIMA(2,0,1) memiliki AIC yang lebih besar dibandingkan dengan model ARIMA(1,0,2) tidak seluruhnya signifikan.
